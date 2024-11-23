@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   FlatList,
   Image,
@@ -11,17 +12,26 @@ import {
 } from "react-native";
 import React, { useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import jwtDecode from "jwt-decode";
+import { jwtDecode } from "jwt-decode";
 import { useRouter } from "expo-router";
 import Entypo from "@expo/vector-icons/Entypo";
 import Carousel from "react-native-reanimated-carousel"; // Updated import
+import axios from "axios";
+import AntDesign from "@expo/vector-icons/AntDesign";
+import "core-js/stable/atob"
 
 const Index = () => {
   const [option, setOption] = useState("AD"); // Add loading state
   const [description, setDescription] = useState("");
+  const [userId, setUserId] = useState("");
+  const [loading, setLoading] = useState(true);
   //initialize the active index sslide to 0
   const [activeSlide, setActiveSlide] = useState(0);
   const router = useRouter();
+  const [selectedTurnOns, setSelectedTurnOns] = useState([]);
+  const [lookingOptions, setLookingOptions] = useState([]);
+  const [imageUrl, setImageUrl] = useState("");
+  const [images, setImages] = useState([]);
 
   const profileImages = [
     {
@@ -36,6 +46,9 @@ const Index = () => {
       image:
         "https://images.pexels.com/photos/7580971/pexels-photo-7580971.jpeg?auto=compress&cs=tinysrgb&w=800",
     },
+    {
+      image : "https://img.freepik.com/photos-gratuite/belle-fille-se-trouve-dans-parc_8353-5084.jpg?size=626&ext=jpg&ga=GA1.1.2008272138.1724284800&semt=ais_hybrid"
+    }
   ];
   const turnons = [
     {
@@ -89,6 +102,208 @@ const Index = () => {
       description: "Let's Vibe and see where it goes",
     },
   ];
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const token = await AsyncStorage.getItem("auth");
+        console.log("Retrieved token:", token);
+
+        if (token) {
+          const decodedToken = jwtDecode(token);
+          console.log("Decoded token:", decodedToken);
+          const userId = decodedToken.userId;
+          setUserId(userId);
+        } else {
+          console.log("No token found, redirecting to login.");
+          router.replace("/login"); // Redirect to login if token is invalid or not found
+        }
+      } catch (error) {
+        console.log("Error decoding token:", error);
+      }
+    };
+
+    fetchUser();
+  }, []);
+  //fetch data of the user with his all descriptions and turnOns and images
+  const fetchUserDescription = async () => {
+    try {
+      const response = await axios.get(`http://localhost:3000/users/${userId}`);
+      console.log(response);
+      const user = response.data;
+      //this is to see the modif on the front even if we reload the app or
+      //if the user logout and login again
+      setDescription(user?.user?.description);
+      setSelectedTurnOns(user.user?.turnOns);
+      setImages(user.user?.profileImages);
+      setLookingOptions(user.user?.lookingFor);
+    } catch (error) {
+      console.log("error of fetching user description", error);
+    }
+  };
+  useEffect(() => {
+    if (userId) {
+      fetchUserDescription();
+    }
+  }, [userId]);
+  const handleLogout = async () => {
+    try {
+      // Make a request to the backend's logout endpoint
+      const response = await axios.post("http://localhost:3000/logout");
+  
+      if (response.status === 200) {
+        // Remove the token from AsyncStorage if logout was successful
+        await AsyncStorage.removeItem("auth");
+        console.log("Token cleared successfully");
+  
+        // Navigate the user to the login screen
+        router.replace("/login");
+      } else {
+        console.log("Logout failed on the server");
+      }
+    } catch (error) {
+      console.error("Error logging out:", error);
+    }
+  };
+  
+
+  const updateUserDescription = async () => {
+    try {
+      const response = await axios.put(
+        `http://localhost:3000/users/${userId}/description`,
+        {
+          description: description,
+        }
+      );
+      console.log(response.data);
+      if (response.status === 200) {
+        Alert.alert("Success", "Description updated successfully");
+      }
+    } catch (error) {
+      console.log("Error updating user description");
+    }
+  };
+
+  //function when clicking on a turnOns if selected turn on is on the array
+  //we will remove it else we will add it to the array
+  const handleToggleTurnOn = (turnOn) => {
+    if (selectedTurnOns.includes(turnOn)) {
+      removeTurnOn(turnOn);
+    } else {
+      addTurnOn(turnOn);
+    }
+  };
+
+  //function to add the looking for to the array and remove it from the array
+  const handleOption = (lookingFor) => {
+    if (lookingOptions.includes(lookingFor)) {
+      removeLookingFor(lookingFor);
+    } else {
+      addLookingFor(lookingFor);
+    }
+  };
+
+  //looking for add
+  const addLookingFor = async (lookingFor) => {
+    try {
+      const response = await axios.put(
+        `http://localhost:3000/users/${userId}/looking-for`,
+        { lookingFor: lookingFor }
+      );
+      console.log(response.data);
+
+      if (response.status == 200) {
+        setLookingOptions([...lookingOptions, lookingFor]);
+      }
+    } catch (error) {
+      console.log("error adding looking for", error);
+    }
+  };
+
+  ///lookingfor remove
+  const removeLookingFor = async (lookingFor) => {
+    try {
+      const response = await axios.put(
+        `http://localhost:3000/users/${userId}/looking-for/remove`,
+        {
+          lookingFor: lookingFor,
+        }
+      );
+      console.log(response.data);
+
+      if (response.status === 200) {
+        setLookingOptions(lookingOptions.filter((item) => item !== lookingFor));
+      }
+    } catch (error) {
+      console.log("error removing looking for", error);
+    }
+  };
+
+  //add turnon to the array
+  const addTurnOn = async (turnOn) => {
+    try {
+      const response = await axios.put(
+        `http://localhost:3000/users/${userId}/turn-ons/add`,
+        {
+          turnOn: turnOn,
+        }
+      );
+
+      console.log(response.data);
+      if (response.status == 200) {
+        setSelectedTurnOns([...selectedTurnOns, turnOn]);
+      }
+    } catch (error) {
+      console.log("Error adding turn on", error);
+    }
+  };
+
+  //remove turnOn from the array
+  const removeTurnOn = async (turnOn) => {
+    try {
+      const response = await axios.put(
+        `http://localhost:3000/users/${userId}/turn-ons/remove`,
+        {
+          turnOn: turnOn,
+        }
+      );
+      console.log(response.data);
+      if (response.status == 200) {
+        setSelectedTurnOns(selectedTurnOns.filter((item) => item !== turnOn));
+      }
+    } catch (error) {
+      console.log("error removing turnOn", error);
+    }
+  };
+
+  //add image function
+  const handleAddImage = async () => {
+    if (!imageUrl) {
+      Alert.alert("Add a url to add an image");
+      return;
+    }
+    try {
+      const response = await axios.post(
+        `http://localhost:3000/users/${userId}/profile-images`,
+        {
+          imageUrl: imageUrl,
+        }
+      );
+      console.log(response);
+      Alert.alert("Image added successfully");
+      setImageUrl("");
+    } catch (error) {
+      console.log("error", error);
+    }
+  };
+ 
+  // generates a random index within the bounds
+  // of the images array and returns the image located at that index.
+  const getRandomImage = () => {
+    const randomIndex = Math.floor(Math.random()* images.length);
+    return images[randomIndex];
+  }
+  //storing the result on randoImage
+  const randomImage = getRandomImage();
 
   const renderImageCarousel = ({ item }) => (
     <View
@@ -102,16 +317,16 @@ const Index = () => {
           borderRadius: 10,
           transform: [{ rotate: "-5deg" }],
         }}
-        source={{ uri: item?.image }}
+        source={{ uri:item }}
       />
       <Text
         style={{ position: "absolute", top: 10, right: 10, color: "black" }}
       >
-        {activeSlide + 1}/{profileImages.length}
+        {activeSlide + 1}/{images.length}
       </Text>
     </View>
   );
-
+  console.log("Description", description);
   return (
     <ScrollView>
       <View>
@@ -147,7 +362,7 @@ const Index = () => {
                   resizeMode: "cover",
                 }}
                 source={{
-                  uri: "https://media.istockphoto.com/id/1364917563/fr/photo/homme-daffaires-souriant-les-bras-crois%C3%A9s-sur-fond-blanc.jpg?b=1&s=612x612&w=0&k=20&c=xDRVF_Mgo8HYITrMZV-XMwec0RnC8l37vkkYrkQZVBc=",
+                  uri: randomImage,
                 }}
               />
               <Text style={{ fontSize: 16, fontWeight: "600", marginTop: 6 }}>
@@ -225,6 +440,7 @@ const Index = () => {
             }}
           >
             <TextInput
+              multiline
               value={description}
               onChangeText={(text) => setDescription(text)}
               style={{
@@ -234,6 +450,7 @@ const Index = () => {
               placeholder="Write your AD for people to like you"
             />
             <Pressable
+              onPress={updateUserDescription}
               style={{
                 marginTop: "auto",
                 flexDirection: "row",
@@ -265,7 +482,7 @@ const Index = () => {
           <View>
             <Carousel
               loop={false}
-              data={profileImages}
+              data={images}
               width={350}
               height={300}
               autoPlay={false}
@@ -297,11 +514,17 @@ const Index = () => {
                   color="black"
                 />
                 <TextInput
+                  value={imageUrl}
+                  onChangeText={(text) => setImageUrl(text)}
                   style={{ color: "gray", marginVertical: 10, width: 300 }}
-                  placeholder="Enter your email"
+                  placeholder="Enter your imageUrl"
                 />
               </View>
-              <Button style={{ marginTop: 5 }} title="Add Image" />
+              <Button
+                onPress={handleAddImage}
+                style={{ marginTop: 5 }}
+                title="Add Image"
+              />
             </View>
           </View>
         )}
@@ -311,6 +534,8 @@ const Index = () => {
           <View>
             {turnons?.map((item, index) => (
               <Pressable
+                //when clicking to the turnOn we take the name as a parameter
+                onPress={() => handleToggleTurnOn(item?.name)}
                 style={{
                   backgroundColor: "#FFFDD0",
                   padding: 10,
@@ -318,16 +543,26 @@ const Index = () => {
                 }}
                 key={index}
               >
-                <View>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
                   <Text
                     style={{
                       textAlign: "center",
                       fontSize: 15,
                       fontWeight: "bold",
+                      flex: 1,
                     }}
                   >
                     {item?.name}
                   </Text>
+                  {selectedTurnOns.includes(item?.name) && (
+                    <AntDesign name="checkcircle" size={18} color="green" />
+                  )}
                 </View>
                 <Text
                   style={{
@@ -349,13 +584,16 @@ const Index = () => {
           <>
             <View>
               <FlatList
-               columnWrapperStyle={{justifyContent:"space-between"}}
+                columnWrapperStyle={{ justifyContent: "space-between" }}
                 numColumns={2}
                 data={data}
                 renderItem={({ item }) => (
                   <Pressable
+                    onPress={() => handleOption(item?.name)}
                     style={{
-                      backgroundColor: "white",
+                      backgroundColor: lookingOptions.includes(item?.name)
+                        ? "#fd5c63"
+                        : "white",
                       padding: 16,
                       justifyContent: "center",
                       alignItems: "center",
@@ -363,7 +601,9 @@ const Index = () => {
                       margin: 10,
                       borderRadius: 5,
                       borderColor: "#fd5c63",
-                      borderWidth: 0.7,
+                      borderWidth: lookingOptions.includes(item?.name)
+                        ? "transparent"
+                        : 0.7,
                     }}
                   >
                     <Text
@@ -371,13 +611,18 @@ const Index = () => {
                         textAlign: "center",
                         fontWeight: "500",
                         fontSize: 13,
+                        color: lookingOptions.includes(item?.name)
+                          ? "white"
+                          : "black",
                       }}
                     >
                       {item?.name}
                     </Text>
                     <Text
                       style={{
-                        color: "gray",
+                        color: lookingOptions.includes(item?.name)
+                          ? "white"
+                          : "gray",
                         textAlign: "center",
                         width: 140,
                         marginTop: 10,
@@ -392,6 +637,13 @@ const Index = () => {
             </View>
           </>
         )}
+        <Pressable onPress={handleLogout}>
+          <Text
+            style={{ color: "red", textAlign: "center", marginVertical: 10 }}
+          >
+            Logout
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   );

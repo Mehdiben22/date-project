@@ -14,6 +14,7 @@ import AntDesign from "@expo/vector-icons/AntDesign";
 import { useRouter } from "expo-router";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {jwtDecode} from "jwt-decode"; 
 
 const login = () => {
   const [email, setEmail] = useState("");
@@ -34,23 +35,61 @@ const login = () => {
     checkLoginStatus()
   },[])
 
-  const handleLogin = () => {
-      const user = {
-        email : email,
-        password : password,
-      };
-     
-      axios.post("http://localhost:3000/login",user).then((response) => {
-        console.log(response);
-        const token = response.data.token;
-        //setting a key for the token in this case we set "auth"
-        AsyncStorage.setItem("auth",token);
-        console.log("Token stored:", token);
-        router.replace("/(authenticate)/select")
+ // Make sure you’re using jwt-decode correctly
 
-        
-      })
-  }
+  // Inside your login function
+  const handleLogin = async () => {
+    const user = {
+      email: email,
+      password: password,
+    };
+  
+    try {
+      const response = await axios.post("http://localhost:3000/login", user);
+      const token = response.data.token;
+  
+      if (!token) {
+        console.log("No token received from server.");
+        return;
+      }
+  
+      await AsyncStorage.setItem("auth", token);
+  
+      // Decode the token and extract userId
+      const decodedToken = jwtDecode(token);
+      console.log("Decoded Token:", decodedToken); // Check decoded token
+      const userId = decodedToken.userId;
+      console.log("Extracted userId:", userId);
+  
+      if (!userId) {
+        console.log("No userId found in token");
+        return;
+      }
+  
+      // Now pass the userId to the endpoint
+      const userResponse = await axios.get(`http://localhost:3000/users/${userId}`);
+      const userData = userResponse.data.user;
+  
+      if (userData.gender) {
+        router.replace("/(tabs)/bio");
+      } else {
+        router.replace("/(authenticate)/select");
+      }
+    } catch (error) {
+      if (error.response) {
+        console.log("Server responded with an error:", error.response.status, error.response.data);
+      } else if (error.request) {
+        console.log("No response received:", error.request);
+      } else {
+        console.log("Error in setting up the request:", error.message);
+      }
+    }
+  };
+  
+  
+  
+  
+  
   
   return (
     <SafeAreaView

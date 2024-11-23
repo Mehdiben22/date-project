@@ -9,33 +9,16 @@ import { useRouter } from "expo-router";
 const select = () => {
   const [option, setOption] = useState("");
   const [userId,setUserId] = useState("");
-  const [loading, setLoading] = useState(true);  // Add a loading state
-
   const router = useRouter();
 
   useEffect(() => {
     // Check if token exists and fetch user details
     const fetchUser = async () => {
       const token = await AsyncStorage.getItem("auth");
-      console.log("Retrieved token:", token);
-      
-
-      if (!token) {
-        router.replace("/login"); // Redirect to login if no token
-        return;
-      }
-
-      try {
         const decodedToken = jwtDecode(token);
         console.log("Decoded token:", decodedToken);
         const userId = decodedToken.userId;
-        setUserId(userId);
-      } catch (error) {
-        console.log("Invalid token:", error);
-        router.replace("/login"); // Redirect to login if token is invalid
-      } finally {
-        setLoading(false);  // Set loading to false after token check
-      }
+        setUserId(userId); 
     };
 
     fetchUser();
